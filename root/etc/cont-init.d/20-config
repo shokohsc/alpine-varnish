@@ -1,0 +1,15 @@
+#!/usr/bin/with-contenv bash
+
+# copy config files
+echo "overwrite /etc/varnish/default.vcl" && \
+ cp /defaults/builtin.vcl /etc/varnish/default.vcl
+
+# permissions
+chown -R varnish:varnish \
+	/etc/varnish \
+    /var
+chmod -R g+w \
+    /etc/varnish
+chmod -R 644 /etc/logrotate.d
+
+chmod 644 /etc/varnish/default.vcl

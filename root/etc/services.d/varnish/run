@@ -1,0 +1,3 @@
+#!/usr/bin/with-contenv bash
+
+exec varnishd -a :80 -f /etc/varnish/default.vcl -F

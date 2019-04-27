@@ -1,0 +1,243 @@
+variables:
+    REGISTRY_URL: registry.gamestream.biz
+    IMAGE_NAME: dimitri/varnish
+    RANCHER_STACK: backend
+    RANCHER_SERVICE: varnish
+    BUILD_CODE_IMAGE: $REGISTRY_URL/$IMAGE_NAME:$CI_COMMIT_TAG
+    LATEST_CODE_IMAGE: $REGISTRY_URL/$IMAGE_NAME:latest
+    DEV_CODE_IMAGE: $REGISTRY_URL/$IMAGE_NAME:$CI_COMMIT_REF_SLUG
+    JANITOR: $REGISTRY_URL/dimitri/registry-janitor
+    DOCKER_DRIVER: overlay2
+
+stages:
+  - build
+  - deploy
+  - cleanup
+
+##################
+### Online dev ###
+##################
+
+build-dev:
+  stage: build
+  except:
+    - tags
+    - master
+    - schedules
+  image: docker:latest
+  tags:
+    - build
+  services:
+    - docker:dind
+  script:
+    - echo $DEV_CODE_IMAGE
+    - ls -la
+    - docker build --tag="$DEV_CODE_IMAGE" .
+    - docker push $DEV_CODE_IMAGE
+
+deploy-dev:
+  stage: deploy
+  tags:
+    - deploy
+  image: cdrx/rancher-gitlab-deploy
+  services:
+    - docker:dind
+  except:
+    - tags
+    - master
+    - schedules
+  script:
+    - upgrade
+        --environment online-dev
+        --stack $RANCHER_STACK
+        --service $RANCHER_SERVICE
+        --start-before-stopping
+        --new-image $DEV_CODE_IMAGE
+        --finish-upgrade
+        --no-ssl-verify
+        --create
+        --label io.rancher.scheduler.affinity:host_label_soft type=$RANCHER_STACK
+        --label io.rancher.container.pull_image always
+
+cleanup-dev:
+  except:
+    - master
+    - tags
+    - schedules
+  stage: cleanup
+  image: docker:latest
+  except:
+    - tags
+    - master
+    - schedules
+  tags:
+    - build
+  services:
+    - docker:dind
+  script:
+    - docker run -d --name janitor-$CI_JOB_ID -e REGISTRY=$REGISTRY_URL -e NAME=$IMAGE_NAME -e TAG=$CI_COMMIT_REF_SLUG $JANITOR
+    - docker logs -f janitor-$CI_JOB_ID
+    - docker rm janitor-$CI_JOB_ID
+
+##################
+### Online Q&A ###
+##################
+
+build-qa:
+  stage: build
+  only:
+    - master
+  image: docker:latest
+  tags:
+    - build
+  services:
+    - docker:dind
+  script:
+    - echo $LATEST_CODE_IMAGE
+    - ls -la
+    - docker build --tag="$LATEST_CODE_IMAGE" .
+    - docker push $LATEST_CODE_IMAGE
+
+deploy-qa:
+  stage: deploy
+  tags:
+    - deploy
+  image: cdrx/rancher-gitlab-deploy
+  services:
+    - docker:dind
+  only:
+    - schedules
+  script:
+    - upgrade
+        --environment online-qa
+        --stack $RANCHER_STACK
+        --service $RANCHER_SERVICE
+        --start-before-stopping
+        --new-image $LATEST_CODE_IMAGE
+        --finish-upgrade
+        --no-ssl-verify
+        --create
+        --label io.rancher.scheduler.affinity:host_label_soft type=$RANCHER_STACK
+        --label io.rancher.container.pull_image always
+
+######################
+### Online Staging ###
+######################
+
+build-staging:
+  stage: build
+  only:
+    - tags
+  image: docker:latest
+  tags:
+    - build
+  services:
+    - docker:dind
+  script:
+    - echo $BUILD_CODE_IMAGE
+    - ls -la
+    - docker build --tag="$BUILD_CODE_IMAGE" .
+    - docker push $BUILD_CODE_IMAGE
+
+deploy-staging:
+  stage: deploy
+  tags:
+    - deploy
+  image: cdrx/rancher-gitlab-deploy
+  services:
+    - docker:dind
+  only:
+    - tags
+  script:
+    - upgrade
+        --environment online-staging
+        --stack $RANCHER_STACK
+        --service $RANCHER_SERVICE
+        --start-before-stopping
+        --new-image $BUILD_CODE_IMAGE
+        --finish-upgrade
+        --no-ssl-verify
+        --create
+        --label io.rancher.scheduler.affinity:host_label_soft type=$RANCHER_STACK
+        --label io.rancher.container.pull_image always
+
+#########################
+### Online production ###
+#########################
+
+deploy-online-prod:
+  stage: deploy
+  tags:
+    - deploy
+  image: cdrx/rancher-gitlab-deploy
+  services:
+    - docker:dind
+  when: manual
+  only:
+    - tags
+  script:
+    - upgrade
+        --environment online-prod
+        --stack $RANCHER_STACK
+        --service $RANCHER_SERVICE
+        --start-before-stopping
+        --new-image $BUILD_CODE_IMAGE
+        --finish-upgrade
+        --no-ssl-verify
+        --create
+        --label io.rancher.scheduler.affinity:host_label_soft type=$RANCHER_STACK
+        --label io.rancher.container.pull_image always
+
+#########################
+### Telkom production ###
+#########################
+
+deploy-telkom-prod:
+  stage: deploy
+  tags:
+    - deploy
+  image: cdrx/rancher-gitlab-deploy
+  services:
+    - docker:dind
+  when: manual
+  only:
+    - tags
+  script:
+    - upgrade
+        --environment telkom-prod
+        --stack $RANCHER_STACK
+        --service $RANCHER_SERVICE
+        --start-before-stopping
+        --new-image $BUILD_CODE_IMAGE
+        --finish-upgrade
+        --no-ssl-verify
+        --create
+        --label io.rancher.scheduler.affinity:host_label_soft type=$RANCHER_STACK
+        --label io.rancher.container.pull_image always
+
+########################
+### Accor production ###
+########################
+
+deploy-accor-prod:
+  stage: deploy
+  tags:
+    - deploy
+  image: cdrx/rancher-gitlab-deploy
+  services:
+    - docker:dind
+  when: manual
+  only:
+    - tags
+  script:
+    - upgrade
+        --environment accor-prod
+        --stack $RANCHER_STACK
+        --service $RANCHER_SERVICE
+        --start-before-stopping
+        --new-image $BUILD_CODE_IMAGE
+        --finish-upgrade
+        --no-ssl-verify
+        --create
+        --label io.rancher.scheduler.affinity:host_label_soft type=$RANCHER_STACK
+        --label io.rancher.container.pull_image always
