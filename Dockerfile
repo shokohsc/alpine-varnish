@@ -1,4 +1,5 @@
-FROM shokohsc/alpine-s6:3.9
+ARG FROM_TAG='latest'
+FROM shokohsc/alpine-s6:${FROM_TAG:-latest}
 
 ENV VARNISH_BACKEND_PORT 80
 
